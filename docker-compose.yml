@@ -5,8 +5,6 @@ services:
     ports:
       - "27018:27017"
     container_name: nosql-db
-    volumes:
-      - ./db/:/data/db
 
   rabbitmq:
     image: rabbitmq:alpine
@@ -17,7 +15,7 @@ services:
   products:
     build:
       dockerfile: Dockerfile
-      context: ./products
+      context: ./backend/products
     container_name: products
     ports:
       - "8002:8002"
@@ -25,16 +23,13 @@ services:
     depends_on:
       - "nosql-db"
       - "rabbitmq"
-    volumes:
-      - .:/app
-      - /app/products/node_modules
-
     env_file:
-      - ./products/.env.dev
+      - ./backend/products/.env.dev
+
   shopping:
     build:
       dockerfile: Dockerfile
-      context: ./shopping
+      context: ./backend/shopping
     container_name: shopping
     ports:
       - "8003:8003"
@@ -42,15 +37,13 @@ services:
     depends_on:
       - "nosql-db"
       - "rabbitmq"
-    volumes:
-      - .:/app
-      - /app/shopping/node_modules
     env_file:
-      - ./shopping/.env.dev
+      - ./backend/shopping/.env.dev
+
   customer:
     build:
       dockerfile: Dockerfile
-      context: ./customer
+      context: ./backend/customer
     container_name: customer
     ports:
       - "8001:8001"
@@ -58,18 +51,16 @@ services:
     depends_on:
       - "nosql-db"
       - "rabbitmq"
-    volumes:
-      - .:/app/
-      - /app/customer/node_modules
     env_file:
-      - ./customer/.env.dev
+      - ./backend/customer/.env.dev
+
   nginx-proxy:
     build:
       dockerfile: Dockerfile
-      context: ./proxy
+      context: ./backend/proxy
     depends_on:
       - products
       - shopping
       - customer
     ports:
-      - 80:80
+      - 8080:80
