@@ -82,11 +82,10 @@ services:
         context: ./frontend
       container_name: frontend
       ports:
-        - "3000:3000"  # <-- THAY ĐỔI QUAN TRỌNG: Ánh xạ cổng 3000 của máy bạn vào cổng 3000 của container
+        - "3000:3000" 
       restart: always
       depends_on:
-        - "nginx-proxy" # Đảm bảo backend (proxy) chạy trước
-      # Thêm dòng này để cập nhật code trực tiếp (hot-reload)
+        - "nginx-proxy" 
       volumes:
         - ./frontend:/app-frontend
         - /app-frontend/node_modules

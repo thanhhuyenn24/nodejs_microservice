@@ -40,6 +40,7 @@ module.exports = (app, channel) => {
 
 
   app.get("/:id", async (req, res, next) => {
+    console.log(`>>> EXECUTING GET /:id handler with id: ${req.params.id} <<<`);
     const productId = req.params.id;
 
     try {
@@ -135,6 +136,7 @@ module.exports = (app, channel) => {
 
   //get Top products and category
   app.get("/", async (req, res, next) => {
+    console.log(">>> EXECUTING GET / handler <<<");
     //check validation
     try {
       const { data } = await service.GetProducts();
