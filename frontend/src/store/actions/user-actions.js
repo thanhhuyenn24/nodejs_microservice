@@ -1,5 +1,6 @@
 import { GetData, PostData } from "../../utils";
 import { Action } from "../actions";
+import { userLogin } from "../user-slice";
 
 export const SetAuthToken = async (token) => {
   if (token) {
@@ -13,7 +14,7 @@ export const onSignup =
   ({ email, password, phone }) =>
   async (dispatch) => {
     try {
-      const response = await PostData("/customner/signup", {
+      const response = await PostData("/customer/signup", {
         email,
         password,
         phone,
@@ -38,7 +39,7 @@ export const onLogin =
       const { token } = response.data;
       await SetAuthToken(token);
 
-      return dispatch({ type: Action.LOGIN, payload: response.data });
+      return dispatch(userLogin(response.data)); 
     } catch (err) {
       console.log(err);
     }

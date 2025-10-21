@@ -18,15 +18,21 @@ module.exports = (app, channel) => {
 
     });
 
-    app.post('/login',  async (req,res,next) => {
-        
+    app.post('/login', async (req, res, next) => {
+    
+    try { // <-- 1. THÊM "try"
+
         const { email, password } = req.body;
+        const { data } = await service.SignIn({ email, password });
+        return res.json(data);
 
-        const { data } = await service.SignIn({ email, password});
+    } catch (err) { // <-- 2. THÊM "catch"
 
-        res.json(data);
-
-    });
+        // 3. Trả về một lỗi JSON an toàn thay vì làm sập server
+        // "err.message" sẽ là "Data Not found!"
+        return res.status(404).json({ message: err.message }); 
+    }
+});
 
     app.post('/address', UserAuth, async (req,res,next) => {
         

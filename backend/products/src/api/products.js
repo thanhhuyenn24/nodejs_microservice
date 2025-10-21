@@ -38,6 +38,7 @@ module.exports = (app, channel) => {
     }
   });
 
+
   app.get("/:id", async (req, res, next) => {
     const productId = req.params.id;
 

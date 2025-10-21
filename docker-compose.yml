@@ -1,7 +1,7 @@
 version: "3"
 services:
   nosql-db:
-    image: mvertes/alpine-mongo
+    image: mongo:8.0
     ports:
       - "27018:27017"
     container_name: nosql-db
@@ -11,6 +11,11 @@ services:
     container_name: rabbitmq
     ports:
       - '5672:5672'
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   products:
     build:
@@ -21,8 +26,10 @@ services:
       - "8002:8002"
     restart: always
     depends_on:
-      - "nosql-db"
-      - "rabbitmq"
+      nosql-db:
+        condition: service_started
+      rabbitmq:
+        condition: service_healthy
     env_file:
       - ./backend/products/.env.dev
 
@@ -35,8 +42,10 @@ services:
       - "8003:8003"
     restart: always
     depends_on:
-      - "nosql-db"
-      - "rabbitmq"
+      nosql-db:
+        condition: service_started
+      rabbitmq:
+        condition: service_healthy
     env_file:
       - ./backend/shopping/.env.dev
 
@@ -49,8 +58,10 @@ services:
       - "8001:8001"
     restart: always
     depends_on:
-      - "nosql-db"
-      - "rabbitmq"
+      nosql-db:
+        condition: service_started
+      rabbitmq:
+        condition: service_healthy
     env_file:
       - ./backend/customer/.env.dev
 
@@ -64,3 +75,18 @@ services:
       - customer
     ports:
       - 8080:80
+
+  frontend:
+      build:
+        dockerfile: Dockerfile
+        context: ./frontend
+      container_name: frontend
+      ports:
+        - "3000:3000"  # <-- THAY ĐỔI QUAN TRỌNG: Ánh xạ cổng 3000 của máy bạn vào cổng 3000 của container
+      restart: always
+      depends_on:
+        - "nginx-proxy" # Đảm bảo backend (proxy) chạy trước
+      # Thêm dòng này để cập nhật code trực tiếp (hot-reload)
+      volumes:
+        - ./frontend:/app-frontend
+        - /app-frontend/node_modules
