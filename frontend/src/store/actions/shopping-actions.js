@@ -1,6 +1,6 @@
 import { DeleteData, GetData, PostData, PutData } from '../../utils'
 import { Action } from '.'
-import { landingProducts } from "../shpping-slice.js";
+import { landingProducts, productDetails } from "../shpping-slice";
  
 export const onGetProducts = (payload) => async(dispatch) => {
 
@@ -24,7 +24,7 @@ export const onGetProducts = (payload) => async(dispatch) => {
 
         const response = await GetData('/'+id);
         
-         dispatch({ type:  Action.PRODUCT_DETAILS, payload: response.data });
+         dispatch(productDetails(response.data));
  
       
     } catch (err) {
