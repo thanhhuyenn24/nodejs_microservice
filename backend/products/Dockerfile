@@ -17,4 +17,4 @@ COPY . .
 EXPOSE 8002
 
 # Lệnh khởi động app
-CMD ["npm", "start"]
+CMD ["node", "-r", "./src/tracing.js", "src/index.js"]

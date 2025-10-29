@@ -1,20 +1,20 @@
-# ✅ Dùng Node 20 (LTS, ổn định)
+# ✅ Dùng Node 20 LTS (ổn định, tương thích tốt với các thư viện cũ)
 FROM node:20
 
-# Thiết lập thư mục làm việc trong container
+# Đặt thư mục làm việc bên trong container
 WORKDIR /app/customer
 
-# Copy file khai báo dependencies
+# Copy file khai báo dependencies trước (để tận dụng cache Docker)
 COPY package*.json ./
 
-# Cài dependencies trong container (tránh copy node_modules từ host)
+# Cài đặt dependencies (không dùng node_modules từ host)
 RUN npm install --omit=dev
 
-# Copy toàn bộ mã nguồn vào container
+# Copy toàn bộ mã nguồn của project vào container
 COPY . .
 
-# Mở cổng 8001 (hoặc cổng app của bạn)
+# Mở cổng mà service customer sẽ chạy (ở đây là 8001)
 EXPOSE 8001
 
-# Chạy app
-CMD ["npm", "start"]
+# Lệnh khởi động app
+CMD ["node", "-r", "./src/tracing.js", "src/index.js"]
