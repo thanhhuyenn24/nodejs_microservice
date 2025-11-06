@@ -1,177 +1,163 @@
 const mongoose = require('mongoose');
 const { CustomerModel, AddressModel } = require('../models');
 
-//Dealing with data base operations
+// Dealing with database operations
 class CustomerRepository {
 
-    async CreateCustomer({ email, password, phone, salt }){
+  async CreateCustomer({ email, password, phone, salt }) {
+    const customer = new CustomerModel({
+      email,
+      password,
+      salt,
+      phone,
+      address: []
+    });
+    const customerResult = await customer.save();
+    return customerResult;
+  }
 
-        const customer = new CustomerModel({
-            email,
-            password,
-            salt,
-            phone,
-            address: []
-        })
+  async CreateAddress({ _id, street, postalCode, city, country }) {
+    // Tạo address mới
+    const newAddress = new AddressModel({
+      street,
+      postalCode,
+      city,
+      country
+    });
+    await newAddress.save();
 
-        const customerResult = await customer.save();
-        return customerResult;
-    }
-    
-    async CreateAddress({ _id, street, postalCode, city, country}){
-        
-        const profile = await CustomerModel.findById(_id);
-        
-        if(profile){
-            
-            const newAddress = new AddressModel({
-                street,
-                postalCode,
-                city,
-                country
-            })
+    // Push id address vào customer bằng atomic update
+    await CustomerModel.updateOne(
+      { _id },
+      { $push: { address: newAddress._id } },
+      { runValidators: true }
+    );
 
-            await newAddress.save();
+    // Trả về profile sau khi cập nhật (có populate address để hiển thị)
+    return await CustomerModel.findById(_id).populate('address').lean();
+  }
 
-            profile.address.push(newAddress);
-        }
+  async FindCustomer({ email }) {
+    // Dùng nguyên doc (không lean) để giữ đủ field password/salt cho ValidatePassword
+    const existingCustomer = await CustomerModel.findOne({ email: email });
+    return existingCustomer;
+  }
 
-        return await profile.save();
-    }
+  async FindCustomerById(id) {
+    // GET-only: dùng lean + populate address
+    const existingCustomer = await CustomerModel.findById(id)
+      .populate('address')
+      .lean();
+    return existingCustomer;
+  }
 
-    async FindCustomer({ email }){
-        const existingCustomer = await CustomerModel.findOne({ email: email });
-        return existingCustomer;
-    }
+  async Wishlist(customerId) {
+    const doc = await CustomerModel.findById(customerId)
+      .select('wishlist')
+      .lean();
+    return doc?.wishlist ?? [];
+  }
 
-    async FindCustomerById({ id }){
+  /**
+   * Toggle wishlist:
+   * - Nếu đã tồn tại _id trong wishlist -> remove
+   * - Nếu chưa tồn tại -> push
+   */
+  async AddWishlistItem(customerId, { _id, name, desc, price, available, banner }) {
+    // 1) Thử remove trước (toggle)
+    const pullRes = await CustomerModel.updateOne(
+      { _id: customerId },
+      { $pull: { wishlist: { _id } } },
+      { runValidators: true }
+    );
 
-        const existingCustomer = await CustomerModel.findById(id).populate('address');
-        // existingCustomer.cart = [];
-        // existingCustomer.orders = [];
-        // existingCustomer.wishlist = [];
-
-        // await existingCustomer.save();
-        return existingCustomer;
-    }
-
-    async Wishlist(customerId){
-
-        const profile = await CustomerModel.findById(customerId).populate('wishlist');
-       
-        return profile.wishlist;
-    }
-
-    async AddWishlistItem(customerId, { _id, name, desc, price, available, banner}){
-        
-        const product = {
-            _id, name, desc, price, available, banner
-        };
-
-        const profile = await CustomerModel.findById(customerId).populate('wishlist');
-       
-        if(profile){
-
-             let wishlist = profile.wishlist;
-  
-            if(wishlist.length > 0){
-                let isExist = false;
-                wishlist.map(item => {
-                    if(item._id.toString() === product._id.toString()){
-                       const index = wishlist.indexOf(item);
-                       wishlist.splice(index,1);
-                       isExist = true;
-                    }
-                });
-
-                if(!isExist){
-                    wishlist.push(product);
-                }
-
-            }else{
-                wishlist.push(product);
-            }
-
-            profile.wishlist = wishlist;
-        }
-
-        const profileResult = await profile.save();      
-
-        return profileResult.wishlist;
-
+    // 2) Nếu không remove được (không tồn tại) thì push mới
+    if (pullRes.modifiedCount === 0) {
+      const product = { _id, name, desc, price, available, banner };
+      await CustomerModel.updateOne(
+        { _id: customerId },
+        { $push: { wishlist: product } },
+        { runValidators: true }
+      );
     }
 
+    // 3) Trả về wishlist mới
+    const doc = await CustomerModel.findById(customerId)
+      .select('wishlist')
+      .lean();
+    return doc?.wishlist ?? [];
+  }
 
-    async AddCartItem(customerId, { _id, name, price, banner},qty, isRemove){
-
- 
-        const profile = await CustomerModel.findById(customerId).populate('cart');
-
-
-        if(profile){ 
- 
-            const cartItem = {
-                product: { _id, name, price, banner },
-                unit: qty,
-            };
-          
-            let cartItems = profile.cart;
-            
-            if(cartItems.length > 0){
-                let isExist = false;
-                 cartItems.map(item => {
-                    if(item.product._id.toString() === _id.toString()){
-
-                        if(isRemove){
-                            cartItems.splice(cartItems.indexOf(item), 1);
-                        }else{
-                            item.unit = qty;
-                        }
-                        isExist = true;
-                    }
-                });
-
-                if(!isExist){
-                    cartItems.push(cartItem);
-                } 
-            }else{
-                cartItems.push(cartItem);
-            }
-
-            profile.cart = cartItems;
-
-            return await profile.save();
-        }
-        
-        throw new Error('Unable to add to cart!');
+  /**
+   * Cart:
+   * - isRemove=true: xoá item theo product._id
+   * - isRemove=false: nếu có rồi -> set unit; nếu chưa -> push mới
+   */
+  async AddCartItem(customerId, { _id, name, price, banner }, qty, isRemove) {
+    if (isRemove) {
+      await CustomerModel.updateOne(
+        { _id: customerId },
+        { $pull: { cart: { 'product._id': _id } } },
+        { runValidators: true }
+      );
+      const doc = await CustomerModel.findById(customerId)
+        .select('cart')
+        .lean();
+      return doc?.cart ?? [];
     }
 
+    // 1) Thử set unit nếu item đã tồn tại
+    const setRes = await CustomerModel.updateOne(
+      { _id: customerId, 'cart.product._id': _id },
+      { $set: { 'cart.$.unit': qty } },
+      { runValidators: true }
+    );
 
-
-    async AddOrderToProfile(customerId, order){
- 
-        const profile = await CustomerModel.findById(customerId);
-
-        if(profile){ 
-            
-            if(profile.orders == undefined){
-                profile.orders = []
-            }
-            profile.orders.push(order);
-
-            profile.cart = [];
-
-            const profileResult = await profile.save();
-
-            return profileResult;
-        }
-        
-        throw new Error('Unable to add to order!');
+    // 2) Nếu chưa có, push mới
+    if (setRes.modifiedCount === 0) {
+      const cartItem = {
+        product: { _id, name, price, banner },
+        unit: qty
+      };
+      await CustomerModel.updateOne(
+        { _id: customerId },
+        { $push: { cart: cartItem } },
+        { runValidators: true }
+      );
     }
 
- 
+    // 3) Trả về cart mới
+    const doc = await CustomerModel.findById(customerId)
+      .select('cart')
+      .lean();
+    return doc?.cart ?? [];
+  }
 
+  async AddOrderToProfile(customerId, order) {
+    // Map dữ liệu order theo schema (đã tắt _id subdoc trong patch schema đề xuất).
+    // Nếu schema của bạn vẫn cho phép _id ở orders, có thể push thẳng "order".
+    const payload = {
+      amount: order.amount,
+      date: order.date ? new Date(order.date) : new Date()
+    };
 
+    await CustomerModel.updateOne(
+      { _id: customerId },
+      {
+        $push: { orders: payload },
+        $set: { cart: [] } // clear cart sau khi tạo order
+      },
+      { runValidators: true }
+    );
+
+    // Trả profile (lean)
+    const doc = await CustomerModel.findById(customerId)
+      .select('orders cart')
+      .lean();
+
+    if (doc) return doc;
+    throw new Error('Unable to add to order!');
+  }
 }
 
 module.exports = CustomerRepository;

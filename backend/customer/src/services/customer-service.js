@@ -52,19 +52,15 @@ class CustomerService {
     }
 
     async GetProfile(id){
-
-        const existingCustomer = await this.repository.FindCustomerById({id});
+        const existingCustomer = await this.repository.FindCustomerById(id);
         return FormateData(existingCustomer);
     }
 
     async GetShopingDetails(id){
-
-        const existingCustomer = await this.repository.FindCustomerById({id});
-
-        if(existingCustomer){
-            // const orders = await this.shopingRepository.Orders(id);
-           return FormateData(existingCustomer);
-        }       
+        const existingCustomer = await this.repository.FindCustomerById(id);
+        if (existingCustomer) {
+            return FormateData(existingCustomer);
+        }
         return FormateData({ msg: 'Error'});
     }
 
