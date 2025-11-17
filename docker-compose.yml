@@ -6,6 +6,15 @@ services:
       - "27018:27017"
     container_name: nosql-db
 
+  toxiproxy:
+    image: ghcr.io/shopify/toxiproxy:2.5.0
+    container_name: toxiproxy
+    ports:
+      - "8474:8474"   # REST API
+      - "8666:8666"   # Port proxy MongoDB
+    command: -host 0.0.0.0
+    restart: always
+    
   rabbitmq:
     image: rabbitmq:alpine
     container_name: rabbitmq

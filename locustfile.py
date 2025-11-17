@@ -9,10 +9,10 @@ BASE = os.getenv("BASE", "http://localhost:8080").rstrip("/")
 CUS_EMAIL = os.getenv("CUS_EMAIL", "test4@test.com")
 CUS_PASSWORD = os.getenv("CUS_PASSWORD", "12345")
 
-EXAMPLE_PRODUCT_ID = os.getenv("PRODUCT_ID", "690c19e928961a9d01ae86a8")
-EXAMPLE_BODY_WISHLIST = {"_id": os.getenv("WISHLIST_ID", "690c19e928961a9d01ae86a8")}
-EXAMPLE_BODY_CART_ADD = {"_id": os.getenv("CART_PRODUCT_ID", "690c19e928961a9d01ae86a8"), "qty": 3}
-EXAMPLE_CART_DELETE_ID = os.getenv("CART_DELETE_ID", "690c19e928961a9d01ae86a8")
+EXAMPLE_PRODUCT_ID = os.getenv("PRODUCT_ID", "691b2ff64260ba49fb35ae9e")
+EXAMPLE_BODY_WISHLIST = {"_id": os.getenv("WISHLIST_ID", "691b2ff64260ba49fb35ae9e")}
+EXAMPLE_BODY_CART_ADD = {"_id": os.getenv("CART_PRODUCT_ID", "691b2ff64260ba49fb35ae9e"), "qty": 3}
+EXAMPLE_CART_DELETE_ID = os.getenv("CART_DELETE_ID", "691b2ff64260ba49fb35ae9e")
 CATEGORY = os.getenv("CATEGORY", "fruits")
 
 # Cho phép bật/tắt tạo tài khoản mới cho mỗi user
