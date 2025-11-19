@@ -5,7 +5,7 @@ const { getNodeAutoInstrumentations } = require('@opentelemetry/auto-instrumenta
 const { OTLPTraceExporter } = require('@opentelemetry/exporter-trace-otlp-http');
 
 // ENV-first
-const SERVICE = process.env.OTEL_SERVICE_NAME || 'customer-service'; // đổi theo service
+const SERVICE = process.env.OTEL_SERVICE_NAME || 'shopping-service'; // đổi theo service
 const OTLP_ENDPOINT = (process.env.OTEL_EXPORTER_OTLP_ENDPOINT || 'http://otel-collector:4318').replace(/\/$/, '');
 
 const traceExporter = new OTLPTraceExporter({
