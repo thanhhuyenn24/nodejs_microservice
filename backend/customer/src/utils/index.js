@@ -1,96 +1,143 @@
-const bcrypt = require("bcrypt");
-const jwt = require("jsonwebtoken");
-const amqplib = require("amqplib");
+const bcrypt = require('bcryptjs');            
+const jwt = require('jsonwebtoken');
+const amqplib = require('amqplib');
 
 const {
   APP_SECRET,
   EXCHANGE_NAME,
   CUSTOMER_SERVICE,
   MSG_QUEUE_URL,
-} = require("../config");
+} = require('../config');
 
-//Utility functions
-module.exports.GenerateSalt = async () => {
-  return await bcrypt.genSalt();
+// =============== Security helpers ===============
+
+// Tạo salt (có thể truyền rounds qua ENV nếu muốn)
+module.exports.GenerateSalt = async (rounds = 10) => {
+  return await bcrypt.genSalt(rounds);
 };
 
+// Hash mật khẩu với salt
 module.exports.GeneratePassword = async (password, salt) => {
   return await bcrypt.hash(password, salt);
 };
 
-module.exports.ValidatePassword = async (
-  enteredPassword,
-  savedPassword,
-  salt
-) => {
-  return (await this.GeneratePassword(enteredPassword, salt)) === savedPassword;
+// So sánh mật khẩu nhập vào với hash đã lưu
+module.exports.ValidatePassword = async (enteredPassword, savedPassword /* hash */) => {
+  // ❗ Không cần salt ở đây: compare làm việc trực tiếp với hash đã lưu
+  return await bcrypt.compare(enteredPassword, savedPassword);
 };
 
+// =============== JWT helpers ===============
 module.exports.GenerateSignature = async (payload) => {
   try {
-    return await jwt.sign(payload, APP_SECRET, { expiresIn: "30d" });
+    // Có thể thêm issuer/audience nếu cần
+    return jwt.sign(payload, APP_SECRET, { expiresIn: '30d' });
   } catch (error) {
-    console.log(error);
-    return error;
+    console.error('[JWT] sign error:', error);
+    throw error;
   }
 };
 
 module.exports.ValidateSignature = async (req) => {
   try {
-    const signature = req.get("Authorization");
-    console.log(signature);
-    const payload = await jwt.verify(signature.split(" ")[1], APP_SECRET);
+    const auth = req.get('Authorization') || '';
+    if (!auth || !auth.toLowerCase().startsWith('bearer ')) {
+      return false;
+    }
+    const token = auth.split(' ')[1];
+    const payload = jwt.verify(token, APP_SECRET);
     req.user = payload;
     return true;
   } catch (error) {
-    console.log(error);
+    console.error('[JWT] verify error:', error.message);
     return false;
   }
 };
 
+// =============== Misc ===============
 module.exports.FormateData = (data) => {
   if (data) {
     return { data };
-  } else {
-    throw new Error("Data Not found!");
   }
+  throw new Error('Data Not found!');
 };
 
-//Message Broker
+// =============== RabbitMQ helpers ===============
+
+// Tạo channel & đảm bảo exchange tồn tại
 module.exports.CreateChannel = async () => {
   try {
     const connection = await amqplib.connect(MSG_QUEUE_URL);
     const channel = await connection.createChannel();
-    await channel.assertQueue(EXCHANGE_NAME, "direct", { durable: true });
+
+    // Đúng cho mô hình pub/sub theo routing key: direct exchange
+    await channel.assertExchange(EXCHANGE_NAME, 'direct', { durable: true });
+
+    // Tuỳ chọn: để xử lý back-pressure
+    // channel.prefetch(1);
+
+    // Log sự cố để dễ debug
+    channel.on('error', (err) => console.error('[AMQP] channel error:', err));
+    channel.on('close', () => console.warn('[AMQP] channel closed'));
+    connection.on('error', (err) => console.error('[AMQP] connection error:', err));
+    connection.on('close', () => console.warn('[AMQP] connection closed'));
+
     return channel;
   } catch (err) {
+    console.error('[AMQP] CreateChannel error:', err);
     throw err;
   }
 };
 
-module.exports.PublishMessage = (channel, service, msg) => {
-  channel.publish(EXCHANGE_NAME, service, Buffer.from(msg));
-  console.log("Sent: ", msg);
+// Publish message theo routing key = service
+module.exports.PublishMessage = (channel, routingKey, msg) => {
+  try {
+    const ok = channel.publish(
+      EXCHANGE_NAME,
+      routingKey,                         // ví dụ: 'shopping-service' / 'products-service'
+      Buffer.from(msg),
+      { persistent: true }                // giữ message khi broker restart
+    );
+    if (!ok) {
+      console.warn('[AMQP] publish backpressure (write buffer full)');
+    }
+    console.log('[AMQP] Sent:', { routingKey, msg });
+  } catch (err) {
+    console.error('[AMQP] PublishMessage error:', err);
+    throw err;
+  }
 };
 
-module.exports.SubscribeMessage = async (channel, service) => {
-  await channel.assertExchange(EXCHANGE_NAME, "direct", { durable: true });
-  const q = await channel.assertQueue("", { exclusive: true });
-  console.log(` Waiting for messages in queue: ${q.queue}`);
+// Subscribe message cho CUSTOMER_SERVICE (routing key)
+module.exports.SubscribeMessage = async (channel, service /* service instance có SubscribeEvents */) => {
+  try {
+    await channel.assertExchange(EXCHANGE_NAME, 'direct', { durable: true });
 
-  channel.bindQueue(q.queue, EXCHANGE_NAME, CUSTOMER_SERVICE);
+    // Tạo queue tạm thời, exclusive cho consumer này
+    const q = await channel.assertQueue('', { exclusive: true });
+    console.log(`[AMQP] Waiting for messages in queue: ${q.queue}`);
 
-  channel.consume(
-    q.queue,
-    (msg) => {
-      if (msg.content) {
-        console.log("the message is:", msg.content.toString());
-        service.SubscribeEvents(msg.content.toString());
-      }
-      console.log("[X] received");
-    },
-    {
-      noAck: true,
-    }
-  );
+    // Ràng buộc queue với routing key của customer
+    await channel.bindQueue(q.queue, EXCHANGE_NAME, CUSTOMER_SERVICE);
+
+    // Nhận tin
+    channel.consume(
+      q.queue,
+      (msg) => {
+        try {
+          if (msg?.content) {
+            const content = msg.content.toString();
+            console.log('[AMQP] Received:', content);
+            service.SubscribeEvents(content);
+          }
+        } catch (err) {
+          console.error('[AMQP] consume handler error:', err);
+        }
+      },
+      { noAck: true }
+    );
+  } catch (err) {
+    console.error('[AMQP] SubscribeMessage error:', err);
+    throw err;
+  }
 };

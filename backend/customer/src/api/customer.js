@@ -49,10 +49,13 @@ module.exports = (app, channel) => {
      
 
     app.get('/profile', UserAuth ,async (req,res,next) => {
-
-        const { _id } = req.user;
-        const { data } = await service.GetProfile({ _id });
-        res.json(data);
+        try {
+            const { _id } = req.user;
+            const { data } = await service.GetProfile(_id); // truyền raw id
+            return res.json(data);
+        } catch (e) {
+            next(e);
+        }
     });
      
 
@@ -64,9 +67,13 @@ module.exports = (app, channel) => {
     });
     
     app.get('/wishlist', UserAuth, async (req,res,next) => {
-        const { _id } = req.user;
-        const { data } = await service.GetWishList( _id);
-        return res.status(200).json(data);
+    try {
+            const { _id } = req.user;
+            const { data } = await service.GetWishList(_id);
+            return res.status(200).json(data);
+        } catch (e) {
+            next(e);
+        }
     });
 
     app.get('/whoami', (req,res,next) => {

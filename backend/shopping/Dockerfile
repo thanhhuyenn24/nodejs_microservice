@@ -17,4 +17,4 @@ COPY . .
 EXPOSE 8003
 
 # Chạy ứng dụng
-CMD ["npm", "start"]
+CMD ["node", "-r", "./src/tracing.js", "src/index.js"]
